@@ -17,3 +17,5 @@ Build as normal, eg.:
 ```sh
 scons
 ```
+
+Working example: [Gonuts Repo](https://github.com/appsinacup/gonuts).
