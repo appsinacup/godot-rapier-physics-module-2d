@@ -56,7 +56,7 @@ public:
 
 extern "C" {
 GDExtensionBool
-gdext_rust_init(GDExtensionInterfaceGetProcAddress p_get_proc_address,
+rapier_2d_init(GDExtensionInterfaceGetProcAddress p_get_proc_address,
 		GDExtensionClassLibraryPtr p_library,
 		GDExtensionInitialization *r_initialization);
 }
@@ -71,7 +71,7 @@ void initialize_rapier_2d_module(ModuleInitializationLevel p_level) {
 
 	Ref<GDExtensionStaticLibraryLoader> loader;
 	loader.instantiate();
-	loader->set_entry_funcptr((void *)&gdext_rust_init);
+	loader->set_entry_funcptr((void *)&rapier_2d_init);
 	GDExtensionManager::get_singleton()->load_extension_with_loader("rapier_2d",
 			loader);
 }
