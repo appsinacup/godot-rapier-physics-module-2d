@@ -1,5 +1,6 @@
 def can_build(env, platform):
-    return True
+    # Rapier doesn't support double precision
+    return env.get("precision", "single") != "double"
 
 
 def configure(env):
