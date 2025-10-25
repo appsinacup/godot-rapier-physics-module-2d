@@ -1,4 +1,11 @@
 #!/usr/bin/env python
+import json
+import os
+import shutil
+import tempfile
+import urllib.request
+import zipfile
+
 from misc.utility.scons_hints import *
 
 Import("env")
@@ -8,76 +15,90 @@ def get_platform_lib():
     """Get the library file based on platform and architecture."""
     platform = env["platform"]
     arch = env["arch"]
-    
     base_path = "#modules/rapier_2d/addons/godot-rapier2d/bin"
     
     if platform in ["macos", "osx"]:
-        if arch == "arm64":
-            lib_file = f"{base_path}/libgodot_rapier.macos.framework/libgodot_rapier.macos.arm64.a"
-        else:
-            lib_file = f"{base_path}/libgodot_rapier.macos.framework/libgodot_rapier.macos.x86_64.a"
-        return lib_file
+        suffix = "arm64" if arch == "arm64" else "x86_64"
+        return f"{base_path}/libgodot_rapier.macos.framework/libgodot_rapier.macos.{suffix}.a"
     
     elif platform == "ios":
-        # iOS uses framework (contains both arm64 and x86_64)
-        if arch == "arm64":
-            lib_file = f"{base_path}/libgodot_rapier.ios.arm64.framework/libgodot_rapier.a"
-        elif arch == "x86_64":
-            lib_file = f"{base_path}/libgodot_rapier.ios.x86_64.framework/libgodot_rapier.a"
-        else:
+        if arch not in ["arm64", "x86_64"]:
             raise Exception(f"Unsupported iOS architecture: {arch}")
-        return lib_file
+        return f"{base_path}/libgodot_rapier.ios.{arch}.framework/libgodot_rapier.a"
     
     elif platform == "linuxbsd":
-        if arch == "x86_64":
-            lib_file = f"{base_path}/libgodot_rapier.linux.x86_64-unknown-linux-gnu.a"
-        elif arch == "arm64":
-            lib_file = f"{base_path}/libgodot_rapier.linux.aarch64-unknown-linux-gnu.a"
-        elif arch == "arm32":
-            lib_file = f"{base_path}/libgodot_rapier.linux.armv7-unknown-linux-gnueabihf.a"
-        else:
+        arch_map = {"x86_64": "x86_64-unknown-linux-gnu", "arm64": "aarch64-unknown-linux-gnu", "arm32": "armv7-unknown-linux-gnueabihf"}
+        if arch not in arch_map:
             raise Exception(f"Unsupported Linux architecture: {arch}")
-        return lib_file
+        return f"{base_path}/libgodot_rapier.linux.{arch_map[arch]}.a"
     
     elif platform == "windows":
-        if arch == "x86_64":
-            lib_file = f"{base_path}/libgodot_rapier.windows.x86_64-pc-windows-msvc.a"
-        elif arch == "x86_32":
-            lib_file = f"{base_path}/libgodot_rapier.windows.i686-pc-windows-msvc.a"
-        elif arch == "arm64":
-            lib_file = f"{base_path}/libgodot_rapier.windows.aarch64-pc-windows-msvc.a"
-        else:
+        arch_map = {"x86_64": "x86_64-pc-windows-msvc", "x86_32": "i686-pc-windows-msvc", "arm64": "aarch64-pc-windows-msvc"}
+        if arch not in arch_map:
             raise Exception(f"Unsupported Windows architecture: {arch}")
-        return lib_file
+        return f"{base_path}/libgodot_rapier.windows.{arch_map[arch]}.a"
     
     elif platform == "android":
-        if arch == "arm64":
-            lib_file = f"{base_path}/libgodot_rapier.android.aarch64-linux-android.a"
-        elif arch == "arm32":
-            lib_file = f"{base_path}/libgodot_rapier.android.armv7-linux-androideabi.a"
-        elif arch == "x86_64":
-            lib_file = f"{base_path}/libgodot_rapier.android.x86_64-linux-android.a"
-        elif arch == "x86_32":
-            lib_file = f"{base_path}/libgodot_rapier.android.i686-linux-android.a"
-        else:
+        arch_map = {"arm64": "aarch64-linux-android", "arm32": "armv7-linux-androideabi", "x86_64": "x86_64-linux-android", "x86_32": "i686-linux-android"}
+        if arch not in arch_map:
             raise Exception(f"Unsupported Android architecture: {arch}")
-        return lib_file
+        return f"{base_path}/libgodot_rapier.android.{arch_map[arch]}.a"
     
     elif platform == "web":
-        if arch == "wasm32":
-            lib_file = f"{base_path}/libgodot_rapier.a"
-        else:
+        if arch != "wasm32":
             raise Exception(f"Unsupported Web architecture: {arch}")
-        return lib_file
+        return f"{base_path}/libgodot_rapier.a"
     
-    else:
-        raise Exception(f"Unsupported platform: {platform}")
+    raise Exception(f"Unsupported platform: {platform}")
 
-# Get library file
+def download_and_extract_release():
+    target_dir = os.path.join("addons", "godot-rapier2d")
+    github_token = os.environ.get("GH_TOKEN")
+
+    if os.path.isdir(target_dir):
+        if not github_token:
+            return
+        shutil.rmtree(target_dir)
+
+    release_url = "https://api.github.com/repos/appsinacup/godot-rapier-physics/releases/latest"
+    asset_name = "static-rapier-2d-single-simd-parallel.zip"
+    
+    request = urllib.request.Request(release_url)
+    if github_token:
+        request.add_header("Authorization", f"token {github_token}")
+
+    with urllib.request.urlopen(request) as response:
+        release_data = json.loads(response.read().decode())
+
+    download_url = next((a["browser_download_url"] for a in release_data.get("assets", []) if a.get("name") == asset_name), None)
+    if not download_url:
+        raise RuntimeError(f"Could not find '{asset_name}' in the latest release.")
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        archive_path = os.path.join(tmp_dir, asset_name)
+        urllib.request.urlretrieve(download_url, archive_path)
+
+        with zipfile.ZipFile(archive_path, "r") as zip_ref:
+            zip_ref.extractall(tmp_dir)
+
+        extracted_addons_dir = next((os.path.join(root, "addons") for root, dirs, _ in os.walk(tmp_dir) if "addons" in dirs), None)
+        if not extracted_addons_dir:
+            raise RuntimeError("Release archive did not contain an 'addons' directory.")
+
+        source_addon_dir = os.path.join(extracted_addons_dir, "godot-rapier2d")
+        if not os.path.isdir(source_addon_dir):
+            raise RuntimeError("Release archive missing 'addons/godot-rapier2d'.")
+
+        shutil.copytree(source_addon_dir, target_dir)
+
+try:
+    download_and_extract_release()
+except RuntimeError as e:
+    print(f"Error: {e}")
+    raise
+
 lib_file = get_platform_lib()
-
 env.Append(LIBS=[env.File(lib_file)])
 
-# Sources
 env_rapier_2d = env_modules.Clone()
 env_rapier_2d.add_source_files(env.modules_sources, "*.cpp")
