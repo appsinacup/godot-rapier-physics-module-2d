@@ -19,35 +19,38 @@ def get_platform_lib():
     
     if platform in ["macos", "osx"]:
         suffix = "arm64" if arch == "arm64" else "x86_64"
-        return f"{base_path}/libgodot_rapier.macos.framework/libgodot_rapier.macos.{suffix}.a"
+        return f"{base_path}/libgodot_rapier2d.macos.framework/libgodot_rapier2d.macos.{suffix}.a"
     
     elif platform == "ios":
         if arch not in ["arm64", "x86_64"]:
             raise Exception(f"Unsupported iOS architecture: {arch}")
-        return f"{base_path}/libgodot_rapier.ios.{arch}.framework/libgodot_rapier.a"
+        return f"{base_path}/libgodot_rapier2d.ios.{arch}.framework/libgodot_rapier2d.a"
     
     elif platform == "linuxbsd":
         arch_map = {"x86_64": "x86_64-unknown-linux-gnu", "arm64": "aarch64-unknown-linux-gnu", "arm32": "armv7-unknown-linux-gnueabihf"}
         if arch not in arch_map:
             raise Exception(f"Unsupported Linux architecture: {arch}")
-        return f"{base_path}/libgodot_rapier.linux.{arch_map[arch]}.a"
+        return f"{base_path}/libgodot_rapier2d.linux.{arch_map[arch]}.a"
     
     elif platform == "windows":
         arch_map = {"x86_64": "x86_64-pc-windows-msvc", "x86_32": "i686-pc-windows-msvc", "arm64": "aarch64-pc-windows-msvc"}
         if arch not in arch_map:
             raise Exception(f"Unsupported Windows architecture: {arch}")
-        return f"{base_path}/libgodot_rapier.windows.{arch_map[arch]}.a"
+        return f"{base_path}/libgodot_rapier2d.windows.{arch_map[arch]}.a"
     
     elif platform == "android":
         arch_map = {"arm64": "aarch64-linux-android", "arm32": "armv7-linux-androideabi", "x86_64": "x86_64-linux-android", "x86_32": "i686-linux-android"}
         if arch not in arch_map:
             raise Exception(f"Unsupported Android architecture: {arch}")
-        return f"{base_path}/libgodot_rapier.android.{arch_map[arch]}.a"
+        return f"{base_path}/libgodot_rapier2d.android.{arch_map[arch]}.a"
     
     elif platform == "web":
         if arch != "wasm32":
             raise Exception(f"Unsupported Web architecture: {arch}")
-        return f"{base_path}/libgodot_rapier.a"
+        if env.get("threads", True):
+            return f"{base_path}/libgodot_rapier2d.a"
+        else:
+            return f"{base_path}/wasm-nothreads/libgodot_rapier2d.a"
     
     raise Exception(f"Unsupported platform: {platform}")
 
@@ -90,6 +93,26 @@ def download_and_extract_release():
             raise RuntimeError("Release archive missing 'addons/godot-rapier2d'.")
 
         shutil.copytree(source_addon_dir, target_dir)
+        
+        # Rename all library files from libgodot_rapier.* to libgodot_rapier2d.*
+        bin_dir = os.path.join(target_dir, "bin")
+        if os.path.isdir(bin_dir):
+            # First pass: rename files (including those inside framework directories)
+            for root, dirs, files in os.walk(bin_dir, topdown=False):
+                for filename in files:
+                    if filename.startswith("libgodot_rapier.") or filename == "libgodot_rapier.a":
+                        old_path = os.path.join(root, filename)
+                        new_filename = filename.replace("libgodot_rapier.", "libgodot_rapier2d.").replace("libgodot_rapier.a", "libgodot_rapier2d.a")
+                        new_path = os.path.join(root, new_filename)
+                        os.rename(old_path, new_path)
+            # Second pass: rename directories (frameworks)
+            for root, dirs, files in os.walk(bin_dir, topdown=False):
+                for dirname in dirs:
+                    if dirname.startswith("libgodot_rapier."):
+                        old_path = os.path.join(root, dirname)
+                        new_dirname = dirname.replace("libgodot_rapier.", "libgodot_rapier2d.")
+                        new_path = os.path.join(root, new_dirname)
+                        os.rename(old_path, new_path)
 
 try:
     download_and_extract_release()
