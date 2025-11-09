@@ -2,6 +2,7 @@
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import urllib.request
 import zipfile
@@ -124,7 +125,7 @@ lib_file = get_platform_lib()
 env.Append(LIBS=[env.File(lib_file)])
 
 # Add linker flags to handle duplicate Rust symbols
-if env["platform"] == "linuxbsd":
+if env["platform"] == "linuxbsd" or env["platform"] == "android":
     env.Append(LINKFLAGS=["-Wl,--allow-multiple-definition"])
     print("Added Linux linker flags to allow multiple symbol definitions")
 elif env["platform"] == "windows":
